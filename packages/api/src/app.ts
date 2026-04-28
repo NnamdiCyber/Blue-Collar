@@ -21,6 +21,7 @@ import referralRoutes from './routes/referral.js'
 import paymentRoutes from './routes/payments.js'
 import { auditMiddleware } from './middleware/audit.js'
 import { versionMiddleware, deprecationWarning } from './middleware/version.js'
+import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
 
 const app = express()
 
@@ -90,5 +91,11 @@ app.get('/metrics/cache', (_req, res) => {
     hitRate: total > 0 ? `${Math.round((cacheMetrics.hits / total) * 100)}%` : '0%',
   })
 })
+
+// 404 handler — must come after all routes
+app.use(notFoundHandler)
+
+// Global error handler — must be last
+app.use(errorHandler)
 
 export default app
