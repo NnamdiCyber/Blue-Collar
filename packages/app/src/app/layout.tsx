@@ -7,6 +7,8 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import PushNotificationPrompt from "@/components/PushNotificationPrompt";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import WebVitalsReporter from "@/components/WebVitalsReporter";
+import OfflineBanner from "@/components/OfflineBanner";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bluecollar.app";
 
@@ -25,6 +27,7 @@ export const metadata: Metadata = {
       { url: "/favicon.svg", type: "image/svg+xml" },
     ],
   },
+  manifest: "/manifest.json",
   openGraph: {
     type: "website",
     siteName: "BlueCollar",
@@ -51,7 +54,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="bc_theme">
           <AuthProvider>
             <WalletProvider>
+              <OfflineBanner />
               <ServiceWorkerRegister />
+              <WebVitalsReporter />
               {children}
               <PushNotificationPrompt />
             </WalletProvider>
