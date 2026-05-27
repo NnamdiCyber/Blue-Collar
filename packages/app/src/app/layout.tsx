@@ -7,6 +7,7 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import PushNotificationPrompt from "@/components/PushNotificationPrompt";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import WebVitalsReporter from "@/components/WebVitalsReporter";
 import OfflineBanner from "@/components/OfflineBanner";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bluecollar.app";
@@ -55,6 +56,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <WalletProvider>
               <OfflineBanner />
               <ServiceWorkerRegister />
+              <WebVitalsReporter />
               {children}
               <PushNotificationPrompt />
             </WalletProvider>
