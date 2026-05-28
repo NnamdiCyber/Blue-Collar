@@ -40,6 +40,14 @@ const ROLE_CURATOR_MGR_CACHED: &str = "curator_mgr";
 const ROLE_REP_MGR_CACHED: &str = "rep_mgr";
 const ROLE_UPGRADER_CACHED: &str = "upgrader";
 
+/// Role IDs for storage key optimization.
+/// Maps role strings to compact u64 IDs for efficient storage.
+const ROLE_ADMIN_ID: u64 = 0;
+const ROLE_PAUSER_ID: u64 = 1;
+const ROLE_CURATOR_MGR_ID: u64 = 2;
+const ROLE_REP_MGR_ID: u64 = 3;
+const ROLE_UPGRADER_ID: u64 = 4;
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -242,8 +250,8 @@ pub enum DataKey {
     Admin,
     /// Instance storage — paused flag; when `true` all state-mutating functions revert.
     Paused,
-    /// Persistent storage — `Vec<Address>` of members for a given role [`Symbol`].
-    RoleMembers(Symbol),
+    /// Persistent storage — `Vec<Address>` of members for a given role.
+    RoleMembers(u64),
     /// Persistent storage — ordered list of approved curator [`Address`]es.
     Curators,
     /// Persistent storage — [`Worker`] record keyed by its `id` [`Symbol`].
@@ -298,7 +306,7 @@ impl RegistryContract {
         let role = Symbol::new(&env, ROLE_ADMIN);
         let mut members: Vec<Address> = Vec::new(&env);
         members.push_back(admin.clone());
-        env.storage().persistent().set(&DataKey::RoleMembers(role.clone()), &members);
+        env.storage().persistent().set(&DataKey::RoleMembers(role_to_id(&role)), &members);
         env.events().publish((symbol_short!("RlGrnt"), role, admin), ());
     }
 
@@ -306,18 +314,38 @@ impl RegistryContract {
     // Internal helpers
     // -------------------------------------------------------------------------
 
-    /// Return the member list for a role, or empty vec if no members exist.
-    fn get_role_members(env: &Env, role: &Symbol) -> Vec<Address> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::RoleMembers(role.clone()))
-            .unwrap_or(Vec::new(env))
-    }
+/// Return the member list for a role, or empty vec if no members exist.
+fn get_role_members(env: &Env, role: &Symbol) -> Vec<Address> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::RoleMembers(role_to_id(role)))
+        .unwrap_or(Vec::new(env))
+}
 
-    /// Create a role symbol efficiently (gas optimization #351).
-    fn role_symbol(env: &Env, role_str: &str) -> Symbol {
-        Symbol::new(env, role_str)
+/// Create a role symbol efficiently (gas optimization #351).
+fn role_symbol(env: &Env, role_str: &str) -> Symbol {
+    Symbol::new(env, role_str)
+}
+
+/// Convert a role symbol to its compact u64 ID for storage optimization.
+fn role_to_id(role: &Symbol) -> u64 {
+    match role.as_string().as_str() {
+        ROLE_ADMIN_CACHED => ROLE_ADMIN_ID,
+        ROLE_PAUSER_CACHED => ROLE_PAUSER_ID,
+        ROLE_CURATOR_MGR_CACHED => ROLE_CURATOR_MGR_ID,
+        ROLE_REP_MGR_CACHED => ROLE_REP_MGR_ID,
+        ROLE_UPGRADER_CACHED => ROLE_UPGRADER_ID,
+        _ => {
+            // Fallback for unknown roles - create a hash-based ID
+            // This ensures forward compatibility while maintaining optimization for known roles
+            let hash = env.crypto().sha256(role.as_string().as_bytes());
+            // Take first 8 bytes and convert to u64
+            let mut id_bytes = [0u8; 8];
+            id_bytes.copy_from_slice(&hash[0..8]);
+            u64::from_le_bytes(id_bytes)
+        }
     }
+}
 
     /// Assert that `caller` holds `role` and has authorised this call.
     ///
@@ -393,7 +421,7 @@ impl RegistryContract {
         let mut members = Self::get_role_members(&env, &role);
         if members.iter().all(|m| m != account) {
             members.push_back(account.clone());
-            env.storage().persistent().set(&DataKey::RoleMembers(role.clone()), &members);
+            env.storage().persistent().set(&DataKey::RoleMembers(role_to_id(&role)), &members);
         }
 
         env.events().publish((symbol_short!("RlGrnt"), role, account), ());
@@ -429,7 +457,7 @@ impl RegistryContract {
             }
         }
         assert!(found, "Account does not hold role");
-        env.storage().persistent().set(&DataKey::RoleMembers(role.clone()), &updated);
+        env.storage().persistent().set(&DataKey::RoleMembers(role_to_id(&role)), &updated);
 
         env.events().publish((symbol_short!("RlRvkd"), role, account), ());
     }
@@ -573,7 +601,7 @@ impl RegistryContract {
         let pauser_role = Self::role_symbol(&env, ROLE_PAUSER_CACHED);
         Self::require_role(&env, &pauser_role, &admin);
         env.storage().instance().set(&DataKey::Paused, &true);
-        env.events().publish((symbol_short!("Paused"), admin), ());
+        env.events().publish((symbol_short!("ContractPaused"), admin), ());
     }
 
     /// Unpause the contract, re-enabling all state-mutating operations.
@@ -585,12 +613,12 @@ impl RegistryContract {
     /// Panics with `"Missing role"` if `admin` does not hold `ROLE_PAUSER`.
     ///
     /// # Events
-    /// Emits `("Unpaused", admin)`.
+    /// Emits `("ContractUnpaused", admin)`.
     pub fn unpause(env: Env, admin: Address) {
         let pauser_role = Self::role_symbol(&env, ROLE_PAUSER_CACHED);
         Self::require_role(&env, &pauser_role, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
-        env.events().publish((symbol_short!("Unpaused"), admin), ());
+        env.events().publish((symbol_short!("ContractUnpaused"), admin), ());
     }
 
     /// Returns `true` if the contract is currently paused.

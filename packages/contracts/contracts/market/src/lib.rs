@@ -40,6 +40,38 @@ pub const ROLE_DISPUTE_MGR: &str = "dispute_mgr";
 pub const ROLE_UPGRADER: &str = "upgrader";
 
 // =============================================================================
+// Gas Optimization Constants for Roles
+// =============================================================================
+
+/// Role IDs for storage key optimization.
+/// Maps role strings to compact u64 IDs for efficient storage.
+const ROLE_ADMIN_ID: u64 = 0;
+const ROLE_PAUSER_ID: u64 = 1;
+const ROLE_FEE_MANAGER_ID: u64 = 2;
+const ROLE_DISPUTE_MGR_ID: u64 = 3;
+const ROLE_UPGRADER_ID: u64 = 4;
+
+/// Convert a role symbol to its compact u64 ID for storage optimization.
+fn role_to_id(role: &Symbol) -> u64 {
+    match role.as_string().as_str() {
+        ROLE_ADMIN => ROLE_ADMIN_ID,
+        ROLE_PAUSER => ROLE_PAUSER_ID,
+        ROLE_FEE_MANAGER => ROLE_FEE_MANAGER_ID,
+        ROLE_DISPUTE_MGR => ROLE_DISPUTE_MGR_ID,
+        ROLE_UPGRADER => ROLE_UPGRADER_ID,
+        _ => {
+            // Fallback for unknown roles - create a hash-based ID
+            // This ensures forward compatibility while maintaining optimization for known roles
+            let hash = env.crypto().sha256(role.as_string().as_bytes());
+            // Take first 8 bytes and convert to u64
+            let mut id_bytes = [0u8; 8];
+            id_bytes.copy_from_slice(&hash[0..8]);
+            u64::from_le_bytes(id_bytes)
+        }
+    }
+}
+
+// =============================================================================
 // Types
 // =============================================================================
 
@@ -129,8 +161,8 @@ pub enum DataKey {
     Config,
     /// Instance storage — paused flag; when `true` all state-mutating functions revert.
     Paused,
-    /// Persistent storage — `Vec<Address>` of members for a given role [`Symbol`].
-    RoleMembers(Symbol),
+    /// Persistent storage — `Vec<Address>` of members for a given role.
+    RoleMembers(u64),
     /// Persistent storage — [`Escrow`] struct keyed by a caller-supplied id [`Symbol`].
     Escrow(Symbol),
     /// Persistent storage — [`MultiSigEscrow`] keyed by a caller-supplied id [`Symbol`].
@@ -178,7 +210,7 @@ impl MarketContract {
         let role = Symbol::new(&env, ROLE_ADMIN);
         let mut members: Vec<Address> = Vec::new(&env);
         members.push_back(admin.clone());
-        env.storage().persistent().set(&DataKey::RoleMembers(role.clone()), &members);
+        env.storage().persistent().set(&DataKey::RoleMembers(role_to_id(&role)), &members);
         env.events().publish((symbol_short!("RlGrnt"), role, admin), ());
     }
 
@@ -212,13 +244,13 @@ impl MarketContract {
     // Internal RBAC helpers
     // -------------------------------------------------------------------------
 
-    /// Return the member list for a role, or empty vec if no members exist.
-    fn get_role_members(env: &Env, role: &Symbol) -> Vec<Address> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::RoleMembers(role.clone()))
-            .unwrap_or(Vec::new(env))
-    }
+/// Return the member list for a role, or empty vec if no members exist.
+fn get_role_members(env: &Env, role: &Symbol) -> Vec<Address> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::RoleMembers(role_to_id(role)))
+        .unwrap_or(Vec::new(env))
+}
 
     /// Assert that `caller` holds `role` and has authorised this call.
     ///
@@ -257,7 +289,7 @@ impl MarketContract {
         let mut members = Self::get_role_members(&env, &role);
         if members.iter().all(|m| m != account) {
             members.push_back(account.clone());
-            env.storage().persistent().set(&DataKey::RoleMembers(role.clone()), &members);
+            env.storage().persistent().set(&DataKey::RoleMembers(role_to_id(&role)), &members);
         }
 
         env.events().publish((symbol_short!("RlGrnt"), role, account), ());
@@ -293,7 +325,7 @@ impl MarketContract {
             }
         }
         assert!(found, "Account does not hold role");
-        env.storage().persistent().set(&DataKey::RoleMembers(role.clone()), &updated);
+        env.storage().persistent().set(&DataKey::RoleMembers(role_to_id(&role)), &updated);
 
         env.events().publish((symbol_short!("RlRvkd"), role, account), ());
     }
