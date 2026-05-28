@@ -35,3 +35,6 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# npm lockfile (project uses pnpm)
+package-lock.json

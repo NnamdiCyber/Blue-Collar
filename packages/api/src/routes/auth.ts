@@ -33,6 +33,8 @@ import {
   resendVerificationRules,
 } from '../validations/index.js'
 
+import { idempotency } from '../middleware/idempotency.js'
+
 const router = Router()
 
 // ── Google OAuth ──────────────────────────────────────────────────────────────
@@ -49,7 +51,7 @@ router.get(
 
 // ── Email / password ──────────────────────────────────────────────────────────
 router.post('/login', strictAuthRateLimiter, validate(loginRules), login)
-router.post('/register', moderateAuthRateLimiter, validate(registerRules), register)
+router.post('/register', moderateAuthRateLimiter, idempotency, validate(registerRules), register)
 
 // Requires a valid JWT; revokes all refresh tokens on logout.
 router.delete('/logout', authenticate, logout)

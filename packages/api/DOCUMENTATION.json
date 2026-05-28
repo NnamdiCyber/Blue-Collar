@@ -509,9 +509,98 @@
       }
     }
   },
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Liveness check",
+        "description": "Returns 200 immediately. Used by load balancers and Docker to verify the process is alive.",
+        "responses": {
+          "200": {
+            "description": "Service is alive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "ok" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Readiness check",
+        "description": "Checks database and Redis connectivity. Returns 200 when all dependencies are healthy, 503 when any dependency is down.",
+        "responses": {
+          "200": {
+            "description": "All dependencies healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "ok" },
+                    "service": { "type": "string", "example": "bluecollar-api" },
+                    "checks": {
+                      "type": "object",
+                      "properties": {
+                        "database": { "type": "object", "properties": { "status": { "type": "string" }, "latencyMs": { "type": "integer" } } },
+                        "redis": { "type": "object", "properties": { "status": { "type": "string" }, "latencyMs": { "type": "integer" } } }
+                      }
+                    },
+                    "timestamp": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          },
+          "503": { "description": "One or more dependencies are unhealthy" }
+        }
+      }
+    },
+    "/api/v1/admin/export/workers": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Export workers as CSV or JSON",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "format", "in": "query", "required": false, "schema": { "type": "string", "enum": ["csv", "json"], "default": "json" } }
+        ],
+        "responses": {
+          "200": { "description": "Streamed worker data in requested format" },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Forbidden — admin only" },
+          "429": { "description": "Rate limit exceeded — 1 export per minute per admin" }
+        }
+      }
+    },
+    "/api/v1/admin/export/users": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Export users as CSV or JSON",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "format", "in": "query", "required": false, "schema": { "type": "string", "enum": ["csv", "json"], "default": "json" } }
+        ],
+        "responses": {
+          "200": { "description": "Streamed user data in requested format" },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Forbidden — admin only" },
+          "429": { "description": "Rate limit exceeded — 1 export per minute per admin" }
+        }
+      }
+    }
+  },
   "tags": [
     { "name": "Auth", "description": "Authentication and account management" },
     { "name": "Categories", "description": "Worker categories" },
-    { "name": "Workers", "description": "Worker listings — public reads, curator/admin writes" }
+    { "name": "Workers", "description": "Worker listings — public reads, curator/admin writes" },
+    { "name": "Admin", "description": "Admin-only operations" },
+    { "name": "Health", "description": "Liveness and readiness probes" }
   ]
 }

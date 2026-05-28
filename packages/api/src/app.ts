@@ -102,7 +102,11 @@ app.use('/api', deprecationWarning, (req, res) => {
   res.redirect(301, target)
 })
 
-app.get('/health', async (_req, res) => {
+app.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'ok' })
+})
+
+app.get('/ready', async (_req, res) => {
   const checks: Record<string, { status: 'ok' | 'error'; latencyMs?: number; error?: string }> = {}
 
   // Database check

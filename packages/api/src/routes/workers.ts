@@ -27,6 +27,8 @@ import { cacheMiddleware, invalidateCachePattern, TTL } from '../middleware/cach
 import { contactRateLimit, generalRateLimit } from '../middleware/userRateLimit.js'
 import { db } from '../db.js'
 
+import { idempotency } from '../middleware/idempotency.js'
+
 const router = Router()
 
 async function showWorkerWithRatings(req: Request, res: Response) {
@@ -53,7 +55,7 @@ router.get('/', generalRateLimit, cacheMiddleware(TTL.SHORT), listWorkers)
 router.get('/mine', authenticate, authorize('curator', 'admin'), listMyWorkers)
 router.get('/mine', withAuth(['curator', 'admin']), listMyWorkers)
 router.get('/:id', generalRateLimit, cacheMiddleware(TTL.MEDIUM), showWorkerWithRatings)
-router.post('/', authenticate, authorize('curator'), validate(createWorkerRules), createWorker)
+router.post('/', authenticate, authorize('curator'), idempotency, validate(createWorkerRules), createWorker)
 router.put('/:id', authenticate, authorize('curator'), updateWorker)
 router.delete('/:id', authenticate, authorize('curator'), deleteWorker)
 router.patch('/:id/toggle', authenticate, authorize('curator'), toggleActivation)

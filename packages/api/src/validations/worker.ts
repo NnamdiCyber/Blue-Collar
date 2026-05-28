@@ -1,32 +1,37 @@
-/**
- * Validation schemas for worker endpoints.
- */
+import { z } from 'zod'
 
 // POST /workers
-export const createWorkerRules = {
-  name: 'required|string',
-  categoryId: 'required|string',
-  phone: 'required_without:email',
-  email: 'required_without:phone|email',
-}
+export const createWorkerRules = z
+  .object({
+    name: z.string().min(1),
+    categoryId: z.string().min(1),
+    phone: z.string().optional(),
+    email: z.string().email().optional(),
+    bio: z.string().optional(),
+    walletAddress: z.string().optional(),
+  })
+  .refine((d) => d.phone || d.email, {
+    message: 'Either phone or email is required',
+    path: ['phone'],
+  })
 
 // PUT /workers/:id — all fields optional
-export const updateWorkerRules = {
-  name: 'string',
-  categoryId: 'string',
-  phone: 'string',
-  email: 'email',
-  bio: 'string',
-  walletAddress: 'string',
-}
+export const updateWorkerRules = z.object({
+  name: z.string().min(1).optional(),
+  categoryId: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().email().optional(),
+  bio: z.string().optional(),
+  walletAddress: z.string().optional(),
+})
 
 // POST /workers/:id/reviews
-export const createReviewRules = {
-  rating: 'required|integer|min:1|max:5',
-  comment: 'string',
-}
+export const createReviewRules = z.object({
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().optional(),
+})
 
 // POST /workers/:id/contact
-export const contactRequestRules = {
-  message: 'required|string|min:10',
-}
+export const contactRequestRules = z.object({
+  message: z.string().min(10),
+})
