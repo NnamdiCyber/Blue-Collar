@@ -73,6 +73,22 @@ pnpm test:e2e          # in another terminal
 
 See [WCAG 2.1 Guidelines](https://www.w3.org/WAI/WCAG21/quickref/) for details.
 
+### Visual Regression Testing
+
+Visual tests catch unintended UI changes using Playwright snapshots and Percy.
+
+**To update snapshots after intentional UI changes:**
+```bash
+pnpm test:e2e visual.spec.ts --update-snapshots
+```
+
+**To run visual tests:**
+```bash
+pnpm test:e2e visual.spec.ts
+```
+
+See [VISUAL_TESTING.md](./VISUAL_TESTING.md) for Percy setup and CI integration.
+
 ## PR Process
 
 1. Fork the repo and create a branch: `git checkout -b feat/your-feature`
