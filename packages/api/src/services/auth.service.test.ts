@@ -49,6 +49,15 @@ vi.mock('../models/user.model.js', () => ({
   },
 }))
 
+vi.mock('../utils/logger.js', () => ({
+  createServiceLogger: () => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  }),
+}))
+
 vi.mock('../config/logger.js', () => ({
   logger: {
     error: vi.fn(),

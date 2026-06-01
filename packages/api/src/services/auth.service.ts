@@ -5,9 +5,10 @@ import crypto from 'node:crypto'
 import { sendVerificationEmail, sendPasswordResetEmail } from '../mailer/index.js'
 import { AppError } from './AppError.js'
 import { sanitizeUser } from '../models/user.model.js'
-import { logger } from '../config/logger.js'
+import { createServiceLogger } from '../utils/logger.js'
 import type { LoginBody, RegisterBody } from '../interfaces/index.js'
 
+const logger = createServiceLogger('AuthService')
 const ACCESS_TOKEN_TTL = '15m'
 const REFRESH_TOKEN_TTL_DAYS = 7
 
@@ -38,11 +39,14 @@ function generateRefreshToken() {
  * Issues a short-lived access token (15 min) and a long-lived refresh token (7 days).
  */
 export async function loginUser({ email, password }: LoginBody) {
+  logger.debug('Login attempt', { email })
   const user = await db.user.findUnique({ where: { email } })
   if (!user || !user.password || !(await argon2.verify(user.password, password))) {
+    logger.warn('Login failed: invalid credentials', { email })
     throw new AppError('Invalid credentials', 401)
   }
   if (!user.verified) {
+    logger.warn('Login failed: email not verified', { email })
     throw new AppError(
       'Your email address has not been verified. Please check your inbox and click the verification link.',
       403,
@@ -56,6 +60,7 @@ export async function loginUser({ email, password }: LoginBody) {
   const { raw: refreshTokenRaw, hash: refreshTokenHash, expiresAt } = generateRefreshToken()
   await db.refreshToken.create({ data: { userId: user.id, tokenHash: refreshTokenHash, expiresAt } })
 
+  logger.info('User logged in successfully', { userId: user.id, email })
   return { data: sanitizeUser(user), token: accessToken, refreshToken: refreshTokenRaw }
 }
 
@@ -108,8 +113,12 @@ export async function revokeAllRefreshTokens(userId: string) {
  * @throws AppError 409 if the email is already registered.
  */
 export async function registerUser({ email, password, firstName, lastName }: RegisterBody) {
+  logger.debug('Registration attempt', { email })
   const existing = await db.user.findUnique({ where: { email } })
-  if (existing) throw new AppError('Email already in use', 409)
+  if (existing) {
+    logger.warn('Registration failed: email already in use', { email })
+    throw new AppError('Email already in use', 409)
+  }
 
   const hashed = await argon2.hash(password)
   const user = await db.user.create({ data: { email, password: hashed, firstName, lastName } })
@@ -121,9 +130,10 @@ export async function registerUser({ email, password, firstName, lastName }: Reg
   })
 
   sendVerificationEmail(email, firstName, raw).catch((err) =>
-    logger.error({ err }, 'Failed to send verification email'),
+    logger.error('Failed to send verification email', err, { email, userId: user.id }),
   )
 
+  logger.info('User registered successfully', { userId: user.id, email })
   return sanitizeUser(user)
 }
 
@@ -138,20 +148,29 @@ export async function registerUser({ email, password, firstName, lastName }: Reg
  * @throws AppError 400 if the token is invalid, expired, or does not match.
  */
 export async function verifyAccount(token: string): Promise<boolean> {
+  logger.debug('Email verification attempt')
   let payload: { id?: string; purpose?: string }
   try {
     payload = jwt.verify(token, process.env.JWT_SECRET!) as { id: string; purpose: string }
   } catch {
+    logger.warn('Email verification failed: invalid token')
     throw new AppError('Token is invalid or has expired', 400)
   }
 
   if (payload.purpose !== 'email-verify' || !payload.id) {
+    logger.warn('Email verification failed: invalid purpose or missing id')
     throw new AppError('Invalid verification token', 400)
   }
 
   const user = await db.user.findUnique({ where: { id: payload.id } })
-  if (!user) throw new AppError('User not found', 404)
-  if (user.verified) return false
+  if (!user) {
+    logger.warn('Email verification failed: user not found', { userId: payload.id })
+    throw new AppError('User not found', 404)
+  }
+  if (user.verified) {
+    logger.debug('Email already verified', { userId: user.id })
+    return false
+  }
 
   const incomingHash = crypto.createHash('sha256').update(token).digest('hex')
   const valid =
@@ -159,12 +178,16 @@ export async function verifyAccount(token: string): Promise<boolean> {
     user.verificationTokenExpiry &&
     user.verificationTokenExpiry > new Date()
 
-  if (!valid) throw new AppError('Token is invalid or has expired', 400)
+  if (!valid) {
+    logger.warn('Email verification failed: invalid or expired token', { userId: user.id })
+    throw new AppError('Token is invalid or has expired', 400)
+  }
 
   await db.user.update({
     where: { id: user.id },
     data: { verified: true, verificationToken: null, verificationTokenExpiry: null },
   })
+  logger.info('Email verified successfully', { userId: user.id })
   return true
 }
 

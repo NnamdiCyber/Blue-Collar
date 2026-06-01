@@ -26,6 +26,16 @@ vi.mock('../models/worker.model.js', () => ({
   }),
 }))
 
+// Mock the logger
+vi.mock('../utils/logger.js', () => ({
+  createServiceLogger: () => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  }),
+}))
+
 const mockDb = db as any
 
 // Helper to create mock worker data
