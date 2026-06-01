@@ -22,6 +22,15 @@ vi.mock('jsonwebtoken', () => ({
   },
 }))
 
+vi.mock('../utils/logger.js', () => ({
+  createServiceLogger: () => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  }),
+}))
+
 const currentUser = {
   id: '1',
   email: 'old@x.com',
